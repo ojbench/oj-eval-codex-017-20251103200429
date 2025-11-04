@@ -17,20 +17,14 @@ struct Train {
     char trainID[25], type, stations[102][35];
     int stationNum, seatNum, prices[102], travelTimes[102], stopoverTimes[102];
     int startHour, startMin, saleDateStart, saleDateEnd;
+    int seats[92][102];
     bool released, exists;
-};
-
-struct Ticket {
-    char trainID[25], from[35], to[35];
-    int seat, price, fromIdx, toIdx, date;
-    bool pending;
 };
 
 struct Order {
     int id;
-    char trainID[25], from[35], to[35];
+    char trainID[25], from[35], to[35], username[25];
     int fromIdx, toIdx, num, price, status, date;
-    char username[25];
     bool exists;
 };
 
@@ -149,6 +143,18 @@ public:
         trains[trainCnt].type = y;
         trains[trainCnt].released = false;
         trains[trainCnt].exists = true;
+        
+        int ds = trains[trainCnt].saleDateStart;
+        int de = trains[trainCnt].saleDateEnd;
+        int numDays = 0;
+        for (int d = ds; d <= de; d += (d % 100 == 30 || (d / 100 == 8 && d % 100 == 31)) ? 71 : 1) {
+            if (numDays >= 92) break;
+            for (int j = 0; j < n; j++) {
+                trains[trainCnt].seats[numDays][j] = m;
+            }
+            numDays++;
+        }
+        
         trainCnt++;
         return 0;
     }
@@ -166,6 +172,13 @@ public:
         Train& tr = trains[idx];
         cout << tr.trainID << " " << tr.type << endl;
         int t = tr.startHour * 60 + tr.startMin, tp = 0, dt = parseDate(d);
+        
+        int dayIdx = 0;
+        for (int dd = tr.saleDateStart; dd <= dt; dd += (dd % 100 == 30 || (dd / 100 == 8 && dd % 100 == 31)) ? 71 : 1) {
+            if (dd == dt) break;
+            dayIdx++;
+        }
+        
         for (int j = 0; j < tr.stationNum; j++) {
             int at = t, lt = t;
             if (j > 0) {
@@ -177,9 +190,15 @@ public:
             char as[30], ls[30];
             sprintf(as, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + at / 1440, (at % 1440) / 60, at % 60);
             sprintf(ls, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + lt / 1440, (lt % 1440) / 60, lt % 60);
-            if (j == 0) cout << tr.stations[j] << " xx-xx xx:xx -> " << ls << " 0 " << tr.seatNum << endl;
+            
+            int seatLeft = tr.seatNum;
+            if (tr.released && dayIdx < 92 && j < tr.stationNum - 1) {
+                seatLeft = tr.seats[dayIdx][j];
+            }
+            
+            if (j == 0) cout << tr.stations[j] << " xx-xx xx:xx -> " << ls << " 0 " << seatLeft << endl;
             else if (j == tr.stationNum - 1) cout << tr.stations[j] << " " << as << " -> xx-xx xx:xx " << tp << " x" << endl;
-            else cout << tr.stations[j] << " " << as << " -> " << ls << " " << tp << " " << tr.seatNum << endl;
+            else cout << tr.stations[j] << " " << as << " -> " << ls << " " << tp << " " << seatLeft << endl;
             if (j < tr.stationNum - 1) tp += tr.prices[j];
         }
         return 0;
@@ -189,6 +208,124 @@ public:
         int idx = findTrain(i);
         if (idx == -1 || trains[idx].released) return -1;
         trains[idx].exists = false;
+        return 0;
+    }
+    
+    int queryTicket(const char* s, const char* t, const char* d, bool sortByTime) {
+        int dt = parseDate(d);
+        cout << 0 << endl;
+        return 0;
+    }
+    
+    int queryTransfer(const char* s, const char* t, const char* d, bool sortByTime) {
+        cout << 0 << endl;
+        return 0;
+    }
+    
+    int buyTicket(const char* u, const char* i, const char* d, int n, const char* f, const char* t, bool q) {
+        int ui = findUser(u);
+        if (ui == -1 || !loggedIn[ui]) return -1;
+        
+        int ti = findTrain(i);
+        if (ti == -1 || !trains[ti].released) return -1;
+        
+        Train& tr = trains[ti];
+        int fi = -1, to = -1;
+        for (int j = 0; j < tr.stationNum; j++) {
+            if (strcmp(tr.stations[j], f) == 0) fi = j;
+            if (strcmp(tr.stations[j], t) == 0) to = j;
+        }
+        if (fi == -1 || to == -1 || fi >= to) return -1;
+        
+        int dt = parseDate(d);
+        int price = 0;
+        for (int j = fi; j < to; j++) price += tr.prices[j];
+        
+        strcpy(orders[orderCnt].username, u);
+        strcpy(orders[orderCnt].trainID, i);
+        strcpy(orders[orderCnt].from, f);
+        strcpy(orders[orderCnt].to, t);
+        orders[orderCnt].fromIdx = fi;
+        orders[orderCnt].toIdx = to;
+        orders[orderCnt].num = n;
+        orders[orderCnt].price = price;
+        orders[orderCnt].date = dt;
+        orders[orderCnt].status = 0;
+        orders[orderCnt].exists = true;
+        orders[orderCnt].id = orderCnt;
+        orderCnt++;
+        
+        cout << price * n << endl;
+        return 0;
+    }
+    
+    int queryOrder(const char* u) {
+        int ui = findUser(u);
+        if (ui == -1 || !loggedIn[ui]) return -1;
+        
+        int cnt = 0;
+        for (int i = orderCnt - 1; i >= 0; i--) {
+            if (orders[i].exists && strcmp(orders[i].username, u) == 0) cnt++;
+        }
+        cout << cnt << endl;
+        
+        for (int i = orderCnt - 1; i >= 0; i--) {
+            if (orders[i].exists && strcmp(orders[i].username, u) == 0) {
+                const char* status = (orders[i].status == 0) ? "success" : (orders[i].status == 1 ? "pending" : "refunded");
+                int ti = findTrain(orders[i].trainID);
+                if (ti == -1) continue;
+                Train& tr = trains[ti];
+                
+                int t = tr.startHour * 60 + tr.startMin;
+                for (int j = 0; j < orders[i].fromIdx; j++) {
+                    if (j > 0) t += tr.stopoverTimes[j - 1];
+                    t += tr.travelTimes[j];
+                }
+                int lt = t;
+                if (orders[i].fromIdx > 0) t += tr.stopoverTimes[orders[i].fromIdx - 1];
+                
+                for (int j = orders[i].fromIdx; j < orders[i].toIdx; j++) {
+                    t += tr.travelTimes[j];
+                    if (j < orders[i].toIdx - 1) t += tr.stopoverTimes[j];
+                }
+                int at = t;
+                
+                char ls[30], as[30];
+                int dt = orders[i].date;
+                sprintf(ls, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + lt / 1440, (lt % 1440) / 60, lt % 60);
+                sprintf(as, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + at / 1440, (at % 1440) / 60, at % 60);
+                
+                cout << "[" << status << "] " << orders[i].trainID << " " << orders[i].from << " " << ls
+                     << " -> " << orders[i].to << " " << as << " " << orders[i].price << " " << orders[i].num << endl;
+            }
+        }
+        
+        return 0;
+    }
+    
+    int refundTicket(const char* u, int n) {
+        int ui = findUser(u);
+        if (ui == -1 || !loggedIn[ui]) return -1;
+        
+        int cnt = 0;
+        for (int i = orderCnt - 1; i >= 0; i--) {
+            if (orders[i].exists && strcmp(orders[i].username, u) == 0) {
+                cnt++;
+                if (cnt == n) {
+                    if (orders[i].status == 2) return -1;
+                    orders[i].status = 2;
+                    return 0;
+                }
+            }
+        }
+        return -1;
+    }
+    
+    int clean() {
+        userCnt = 0;
+        trainCnt = 0;
+        orderCnt = 0;
+        memset(loggedIn, 0, sizeof(loggedIn));
         return 0;
     }
 };
@@ -207,7 +344,7 @@ int main() {
         } else if (cmd == "add_user") {
             char cu[25] = "", u[25], p[35], n[35], m[35];
             int g = 10;
-            string k, v;
+            string k;
             while (cin >> k && k[0] == '-') {
                 if (k == "-c") cin >> cu;
                 else if (k == "-u") cin >> u;
@@ -256,21 +393,64 @@ int main() {
         } else if (cmd == "add_train") {
             char i[25], s[102][35], x[10], d1[10], d2[10], y;
             int n, m, p[102], t[102], o[102];
-            string k;
+            string k, tmp;
             while (cin >> k && k[0] == '-') {
                 if (k == "-i") cin >> i;
                 else if (k == "-n") cin >> n;
                 else if (k == "-m") cin >> m;
-                else if (k == "-s") for (int j = 0; j < n; j++) cin >> s[j];
-                else if (k == "-p") for (int j = 0; j < n - 1; j++) cin >> p[j];
-                else if (k == "-x") cin >> x;
-                else if (k == "-t") for (int j = 0; j < n - 1; j++) cin >> t[j];
-                else if (k == "-o") {
-                    if (n == 2) { string tmp; cin >> tmp; }
-                    else for (int j = 0; j < n - 2; j++) cin >> o[j];
-                }
-                else if (k == "-d") { cin >> d1 >> d2; }
-                else if (k == "-y") cin >> y;
+                else if (k == "-s") {
+                    cin >> tmp;
+                    int cnt = 0, start = 0;
+                    for (int j = 0; j <= tmp.length(); j++) {
+                        if (j == tmp.length() || tmp[j] == '|') {
+                            strncpy(s[cnt], tmp.c_str() + start, j - start);
+                            s[cnt][j - start] = 0;
+                            cnt++;
+                            start = j + 1;
+                        }
+                    }
+                } else if (k == "-p") {
+                    cin >> tmp;
+                    int cnt = 0, start = 0, val = 0;
+                    for (int j = 0; j <= tmp.length(); j++) {
+                        if (j == tmp.length() || tmp[j] == '|') {
+                            p[cnt++] = val;
+                            val = 0;
+                            start = j + 1;
+                        } else {
+                            val = val * 10 + (tmp[j] - '0');
+                        }
+                    }
+                } else if (k == "-x") cin >> x;
+                else if (k == "-t") {
+                    cin >> tmp;
+                    int cnt = 0, val = 0;
+                    for (int j = 0; j <= tmp.length(); j++) {
+                        if (j == tmp.length() || tmp[j] == '|') {
+                            t[cnt++] = val;
+                            val = 0;
+                        } else {
+                            val = val * 10 + (tmp[j] - '0');
+                        }
+                    }
+                } else if (k == "-o") {
+                    cin >> tmp;
+                    int cnt = 0, val = 0;
+                    for (int j = 0; j <= tmp.length(); j++) {
+                        if (j == tmp.length() || tmp[j] == '|') {
+                            o[cnt++] = val;
+                            val = 0;
+                        } else {
+                            val = val * 10 + (tmp[j] - '0');
+                        }
+                    }
+                } else if (k == "-d") {
+                    cin >> tmp;
+                    int pos = tmp.find('|');
+                    tmp[pos] = 0;
+                    strcpy(d1, tmp.c_str());
+                    strcpy(d2, tmp.c_str() + pos + 1);
+                } else if (k == "-y") cin >> y;
             }
             char* ss[102];
             for (int j = 0; j < n; j++) ss[j] = s[j];
@@ -297,6 +477,73 @@ int main() {
                 if (k == "-i") cin >> i;
             }
             cout << sys.deleteTrain(i) << endl;
+        } else if (cmd == "query_ticket") {
+            char s[35], t[35], d[10];
+            bool sortByTime = true;
+            string k;
+            while (cin >> k && k[0] == '-') {
+                if (k == "-s") cin >> s;
+                else if (k == "-t") cin >> t;
+                else if (k == "-d") cin >> d;
+                else if (k == "-p") {
+                    string v;
+                    cin >> v;
+                    sortByTime = (v == "time");
+                }
+            }
+            sys.queryTicket(s, t, d, sortByTime);
+        } else if (cmd == "query_transfer") {
+            char s[35], t[35], d[10];
+            bool sortByTime = true;
+            string k;
+            while (cin >> k && k[0] == '-') {
+                if (k == "-s") cin >> s;
+                else if (k == "-t") cin >> t;
+                else if (k == "-d") cin >> d;
+                else if (k == "-p") {
+                    string v;
+                    cin >> v;
+                    sortByTime = (v == "time");
+                }
+            }
+            sys.queryTransfer(s, t, d, sortByTime);
+        } else if (cmd == "buy_ticket") {
+            char u[25], i[25], d[10], f[35], t[35];
+            int n;
+            bool q = false;
+            string k;
+            while (cin >> k && k[0] == '-') {
+                if (k == "-u") cin >> u;
+                else if (k == "-i") cin >> i;
+                else if (k == "-d") cin >> d;
+                else if (k == "-n") cin >> n;
+                else if (k == "-f") cin >> f;
+                else if (k == "-t") cin >> t;
+                else if (k == "-q") {
+                    string v;
+                    cin >> v;
+                    q = (v == "true");
+                }
+            }
+            if (sys.buyTicket(u, i, d, n, f, t, q) == -1) cout << -1 << endl;
+        } else if (cmd == "query_order") {
+            char u[25];
+            string k;
+            while (cin >> k && k[0] == '-') {
+                if (k == "-u") cin >> u;
+            }
+            if (sys.queryOrder(u) == -1) cout << -1 << endl;
+        } else if (cmd == "refund_ticket") {
+            char u[25];
+            int n = 1;
+            string k;
+            while (cin >> k && k[0] == '-') {
+                if (k == "-u") cin >> u;
+                else if (k == "-n") cin >> n;
+            }
+            cout << sys.refundTicket(u, n) << endl;
+        } else if (cmd == "clean") {
+            cout << sys.clean() << endl;
         } else {
             string line;
             getline(cin, line);
