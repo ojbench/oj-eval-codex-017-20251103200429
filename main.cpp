@@ -1,11 +1,10 @@
 #include <iostream>
 #include <cstring>
 #include <cstdio>
-#include <fstream>
 
 using namespace std;
 
-const int MAXN = 100005;
+const int MAXN = 5000;
 
 struct User {
     char username[25], password[35], name[35], mailAddr[35];
@@ -17,7 +16,6 @@ struct Train {
     char trainID[25], type, stations[102][35];
     int stationNum, seatNum, prices[102], travelTimes[102], stopoverTimes[102];
     int startHour, startMin, saleDateStart, saleDateEnd;
-    int seats[92][102];
     bool released, exists;
 };
 
@@ -28,313 +26,284 @@ struct Order {
     bool exists;
 };
 
-class TicketSystem {
-private:
-    User users[MAXN];
-    Train trains[MAXN];
-    Order orders[MAXN * 10];
-    bool loggedIn[MAXN];
-    int userCnt, trainCnt, orderCnt;
-    
-    int findUser(const char* u) {
-        for (int i = 0; i < userCnt; i++)
-            if (users[i].exists && strcmp(users[i].username, u) == 0) return i;
-        return -1;
-    }
-    
-    int findTrain(const char* t) {
-        for (int i = 0; i < trainCnt; i++)
-            if (trains[i].exists && strcmp(trains[i].trainID, t) == 0) return i;
-        return -1;
-    }
-    
-    int parseDate(const char* s) {
-        int m, d;
-        sscanf(s, "%d-%d", &m, &d);
-        return m * 100 + d;
-    }
-    
-    int parseTime(const char* s) {
-        int h, m;
-        sscanf(s, "%d:%d", &h, &m);
-        return h * 60 + m;
-    }
-    
-public:
-    TicketSystem() : userCnt(0), trainCnt(0), orderCnt(0) {
-        memset(loggedIn, 0, sizeof(loggedIn));
-    }
-    
-    int addUser(const char* cu, const char* u, const char* p, const char* n, const char* m, int g) {
-        if (userCnt == 0) {
-            strcpy(users[0].username, u);
-            strcpy(users[0].password, p);
-            strcpy(users[0].name, n);
-            strcpy(users[0].mailAddr, m);
-            users[0].privilege = 10;
-            users[0].exists = true;
-            userCnt++;
-            return 0;
-        }
-        int ci = findUser(cu);
-        if (ci == -1 || !loggedIn[ci] || users[ci].privilege <= g || findUser(u) != -1) return -1;
-        strcpy(users[userCnt].username, u);
-        strcpy(users[userCnt].password, p);
-        strcpy(users[userCnt].name, n);
-        strcpy(users[userCnt].mailAddr, m);
-        users[userCnt].privilege = g;
-        users[userCnt].exists = true;
+User users[MAXN];
+Train trains[MAXN];
+Order orders[MAXN * 20];
+bool loggedIn[MAXN];
+int userCnt, trainCnt, orderCnt;
+
+int findUser(const char* u) {
+    for (int i = 0; i < userCnt; i++)
+        if (users[i].exists && strcmp(users[i].username, u) == 0) return i;
+    return -1;
+}
+
+int findTrain(const char* t) {
+    for (int i = 0; i < trainCnt; i++)
+        if (trains[i].exists && strcmp(trains[i].trainID, t) == 0) return i;
+    return -1;
+}
+
+int parseDate(const char* s) {
+    int m, d;
+    sscanf(s, "%d-%d", &m, &d);
+    return m * 100 + d;
+}
+
+int parseTime(const char* s) {
+    int h, m;
+    sscanf(s, "%d:%d", &h, &m);
+    return h * 60 + m;
+}
+
+int addUser(const char* cu, const char* u, const char* p, const char* n, const char* m, int g) {
+    if (userCnt == 0) {
+        strcpy(users[0].username, u);
+        strcpy(users[0].password, p);
+        strcpy(users[0].name, n);
+        strcpy(users[0].mailAddr, m);
+        users[0].privilege = 10;
+        users[0].exists = true;
         userCnt++;
         return 0;
     }
-    
-    int login(const char* u, const char* p) {
-        int i = findUser(u);
-        if (i == -1 || loggedIn[i] || strcmp(users[i].password, p)) return -1;
-        loggedIn[i] = true;
-        return 0;
-    }
-    
-    int logout(const char* u) {
-        int i = findUser(u);
-        if (i == -1 || !loggedIn[i]) return -1;
-        loggedIn[i] = false;
-        return 0;
-    }
-    
-    int queryProfile(const char* cu, const char* u) {
-        int ci = findUser(cu), i = findUser(u);
-        if (ci == -1 || !loggedIn[ci] || i == -1) return -1;
-        if (strcmp(cu, u) && users[ci].privilege <= users[i].privilege) return -1;
-        cout << users[i].username << " " << users[i].name << " " << users[i].mailAddr << " " << users[i].privilege << endl;
-        return 0;
-    }
-    
-    int modifyProfile(const char* cu, const char* u, const char* p, const char* n, const char* m, int g) {
-        int ci = findUser(cu), i = findUser(u);
-        if (ci == -1 || !loggedIn[ci] || i == -1) return -1;
-        if (strcmp(cu, u)) {
-            if (users[ci].privilege <= users[i].privilege || (g != -1 && users[ci].privilege <= g)) return -1;
-        }
-        if (p[0]) strcpy(users[i].password, p);
-        if (n[0]) strcpy(users[i].name, n);
-        if (m[0]) strcpy(users[i].mailAddr, m);
-        if (g != -1) users[i].privilege = g;
-        cout << users[i].username << " " << users[i].name << " " << users[i].mailAddr << " " << users[i].privilege << endl;
-        return 0;
-    }
-    
-    int addTrain(const char* i, int n, int m, char** s, int* p, const char* x, int* t, int* o, const char* d1, const char* d2, char y) {
-        if (findTrain(i) != -1) return -1;
-        strcpy(trains[trainCnt].trainID, i);
-        trains[trainCnt].stationNum = n;
-        trains[trainCnt].seatNum = m;
-        for (int j = 0; j < n; j++) strcpy(trains[trainCnt].stations[j], s[j]);
-        for (int j = 0; j < n - 1; j++) {
-            trains[trainCnt].prices[j] = p[j];
-            trains[trainCnt].travelTimes[j] = t[j];
-        }
-        for (int j = 0; j < n - 2; j++) trains[trainCnt].stopoverTimes[j] = o[j];
-        int tm = parseTime(x);
-        trains[trainCnt].startHour = tm / 60;
-        trains[trainCnt].startMin = tm % 60;
-        trains[trainCnt].saleDateStart = parseDate(d1);
-        trains[trainCnt].saleDateEnd = parseDate(d2);
-        trains[trainCnt].type = y;
-        trains[trainCnt].released = false;
-        trains[trainCnt].exists = true;
-        
-        int ds = trains[trainCnt].saleDateStart;
-        int de = trains[trainCnt].saleDateEnd;
-        int numDays = 0;
-        for (int d = ds; d <= de; d += (d % 100 == 30 || (d / 100 == 8 && d % 100 == 31)) ? 71 : 1) {
-            if (numDays >= 92) break;
-            for (int j = 0; j < n; j++) {
-                trains[trainCnt].seats[numDays][j] = m;
-            }
-            numDays++;
-        }
-        
-        trainCnt++;
-        return 0;
-    }
-    
-    int releaseTrain(const char* i) {
-        int idx = findTrain(i);
-        if (idx == -1 || trains[idx].released) return -1;
-        trains[idx].released = true;
-        return 0;
-    }
-    
-    int queryTrain(const char* i, const char* d) {
-        int idx = findTrain(i);
-        if (idx == -1) return -1;
-        Train& tr = trains[idx];
-        cout << tr.trainID << " " << tr.type << endl;
-        int t = tr.startHour * 60 + tr.startMin, tp = 0, dt = parseDate(d);
-        
-        int dayIdx = 0;
-        for (int dd = tr.saleDateStart; dd <= dt; dd += (dd % 100 == 30 || (dd / 100 == 8 && dd % 100 == 31)) ? 71 : 1) {
-            if (dd == dt) break;
-            dayIdx++;
-        }
-        
-        for (int j = 0; j < tr.stationNum; j++) {
-            int at = t, lt = t;
-            if (j > 0) {
-                t += tr.travelTimes[j - 1];
-                at = t;
-                lt = t;
-                if (j < tr.stationNum - 1) t += tr.stopoverTimes[j - 1], lt = t;
-            }
-            char as[30], ls[30];
-            sprintf(as, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + at / 1440, (at % 1440) / 60, at % 60);
-            sprintf(ls, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + lt / 1440, (lt % 1440) / 60, lt % 60);
-            
-            int seatLeft = tr.seatNum;
-            if (tr.released && dayIdx < 92 && j < tr.stationNum - 1) {
-                seatLeft = tr.seats[dayIdx][j];
-            }
-            
-            if (j == 0) cout << tr.stations[j] << " xx-xx xx:xx -> " << ls << " 0 " << seatLeft << endl;
-            else if (j == tr.stationNum - 1) cout << tr.stations[j] << " " << as << " -> xx-xx xx:xx " << tp << " x" << endl;
-            else cout << tr.stations[j] << " " << as << " -> " << ls << " " << tp << " " << seatLeft << endl;
-            if (j < tr.stationNum - 1) tp += tr.prices[j];
-        }
-        return 0;
-    }
-    
-    int deleteTrain(const char* i) {
-        int idx = findTrain(i);
-        if (idx == -1 || trains[idx].released) return -1;
-        trains[idx].exists = false;
-        return 0;
-    }
-    
-    int queryTicket(const char* s, const char* t, const char* d, bool sortByTime) {
-        int dt = parseDate(d);
-        cout << 0 << endl;
-        return 0;
-    }
-    
-    int queryTransfer(const char* s, const char* t, const char* d, bool sortByTime) {
-        cout << 0 << endl;
-        return 0;
-    }
-    
-    int buyTicket(const char* u, const char* i, const char* d, int n, const char* f, const char* t, bool q) {
-        int ui = findUser(u);
-        if (ui == -1 || !loggedIn[ui]) return -1;
-        
-        int ti = findTrain(i);
-        if (ti == -1 || !trains[ti].released) return -1;
-        
-        Train& tr = trains[ti];
-        int fi = -1, to = -1;
-        for (int j = 0; j < tr.stationNum; j++) {
-            if (strcmp(tr.stations[j], f) == 0) fi = j;
-            if (strcmp(tr.stations[j], t) == 0) to = j;
-        }
-        if (fi == -1 || to == -1 || fi >= to) return -1;
-        
-        int dt = parseDate(d);
-        int price = 0;
-        for (int j = fi; j < to; j++) price += tr.prices[j];
-        
-        strcpy(orders[orderCnt].username, u);
-        strcpy(orders[orderCnt].trainID, i);
-        strcpy(orders[orderCnt].from, f);
-        strcpy(orders[orderCnt].to, t);
-        orders[orderCnt].fromIdx = fi;
-        orders[orderCnt].toIdx = to;
-        orders[orderCnt].num = n;
-        orders[orderCnt].price = price;
-        orders[orderCnt].date = dt;
-        orders[orderCnt].status = 0;
-        orders[orderCnt].exists = true;
-        orders[orderCnt].id = orderCnt;
-        orderCnt++;
-        
-        cout << price * n << endl;
-        return 0;
-    }
-    
-    int queryOrder(const char* u) {
-        int ui = findUser(u);
-        if (ui == -1 || !loggedIn[ui]) return -1;
-        
-        int cnt = 0;
-        for (int i = orderCnt - 1; i >= 0; i--) {
-            if (orders[i].exists && strcmp(orders[i].username, u) == 0) cnt++;
-        }
-        cout << cnt << endl;
-        
-        for (int i = orderCnt - 1; i >= 0; i--) {
-            if (orders[i].exists && strcmp(orders[i].username, u) == 0) {
-                const char* status = (orders[i].status == 0) ? "success" : (orders[i].status == 1 ? "pending" : "refunded");
-                int ti = findTrain(orders[i].trainID);
-                if (ti == -1) continue;
-                Train& tr = trains[ti];
-                
-                int t = tr.startHour * 60 + tr.startMin;
-                for (int j = 0; j < orders[i].fromIdx; j++) {
-                    if (j > 0) t += tr.stopoverTimes[j - 1];
-                    t += tr.travelTimes[j];
-                }
-                int lt = t;
-                if (orders[i].fromIdx > 0) t += tr.stopoverTimes[orders[i].fromIdx - 1];
-                
-                for (int j = orders[i].fromIdx; j < orders[i].toIdx; j++) {
-                    t += tr.travelTimes[j];
-                    if (j < orders[i].toIdx - 1) t += tr.stopoverTimes[j];
-                }
-                int at = t;
-                
-                char ls[30], as[30];
-                int dt = orders[i].date;
-                sprintf(ls, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + lt / 1440, (lt % 1440) / 60, lt % 60);
-                sprintf(as, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + at / 1440, (at % 1440) / 60, at % 60);
-                
-                cout << "[" << status << "] " << orders[i].trainID << " " << orders[i].from << " " << ls
-                     << " -> " << orders[i].to << " " << as << " " << orders[i].price << " " << orders[i].num << endl;
-            }
-        }
-        
-        return 0;
-    }
-    
-    int refundTicket(const char* u, int n) {
-        int ui = findUser(u);
-        if (ui == -1 || !loggedIn[ui]) return -1;
-        
-        int cnt = 0;
-        for (int i = orderCnt - 1; i >= 0; i--) {
-            if (orders[i].exists && strcmp(orders[i].username, u) == 0) {
-                cnt++;
-                if (cnt == n) {
-                    if (orders[i].status == 2) return -1;
-                    orders[i].status = 2;
-                    return 0;
-                }
-            }
-        }
-        return -1;
-    }
-    
-    int clean() {
-        userCnt = 0;
-        trainCnt = 0;
-        orderCnt = 0;
-        memset(loggedIn, 0, sizeof(loggedIn));
-        return 0;
-    }
-};
+    int ci = findUser(cu);
+    if (ci == -1 || !loggedIn[ci] || users[ci].privilege <= g || findUser(u) != -1) return -1;
+    strcpy(users[userCnt].username, u);
+    strcpy(users[userCnt].password, p);
+    strcpy(users[userCnt].name, n);
+    strcpy(users[userCnt].mailAddr, m);
+    users[userCnt].privilege = g;
+    users[userCnt].exists = true;
+    userCnt++;
+    return 0;
+}
 
-TicketSystem sys;
+int login(const char* u, const char* p) {
+    int i = findUser(u);
+    if (i == -1 || loggedIn[i] || strcmp(users[i].password, p)) return -1;
+    loggedIn[i] = true;
+    return 0;
+}
+
+int logout(const char* u) {
+    int i = findUser(u);
+    if (i == -1 || !loggedIn[i]) return -1;
+    loggedIn[i] = false;
+    return 0;
+}
+
+int queryProfile(const char* cu, const char* u) {
+    int ci = findUser(cu), i = findUser(u);
+    if (ci == -1 || !loggedIn[ci] || i == -1) return -1;
+    if (strcmp(cu, u) && users[ci].privilege <= users[i].privilege) return -1;
+    cout << users[i].username << " " << users[i].name << " " << users[i].mailAddr << " " << users[i].privilege << endl;
+    return 0;
+}
+
+int modifyProfile(const char* cu, const char* u, const char* p, const char* n, const char* m, int g) {
+    int ci = findUser(cu), i = findUser(u);
+    if (ci == -1 || !loggedIn[ci] || i == -1) return -1;
+    if (strcmp(cu, u)) {
+        if (users[ci].privilege <= users[i].privilege || (g != -1 && users[ci].privilege <= g)) return -1;
+    }
+    if (p[0]) strcpy(users[i].password, p);
+    if (n[0]) strcpy(users[i].name, n);
+    if (m[0]) strcpy(users[i].mailAddr, m);
+    if (g != -1) users[i].privilege = g;
+    cout << users[i].username << " " << users[i].name << " " << users[i].mailAddr << " " << users[i].privilege << endl;
+    return 0;
+}
+
+int addTrain(const char* i, int n, int m, char** s, int* p, const char* x, int* t, int* o, const char* d1, const char* d2, char y) {
+    if (findTrain(i) != -1) return -1;
+    strcpy(trains[trainCnt].trainID, i);
+    trains[trainCnt].stationNum = n;
+    trains[trainCnt].seatNum = m;
+    for (int j = 0; j < n; j++) strcpy(trains[trainCnt].stations[j], s[j]);
+    for (int j = 0; j < n - 1; j++) {
+        trains[trainCnt].prices[j] = p[j];
+        trains[trainCnt].travelTimes[j] = t[j];
+    }
+    for (int j = 0; j < n - 2; j++) trains[trainCnt].stopoverTimes[j] = o[j];
+    int tm = parseTime(x);
+    trains[trainCnt].startHour = tm / 60;
+    trains[trainCnt].startMin = tm % 60;
+    trains[trainCnt].saleDateStart = parseDate(d1);
+    trains[trainCnt].saleDateEnd = parseDate(d2);
+    trains[trainCnt].type = y;
+    trains[trainCnt].released = false;
+    trains[trainCnt].exists = true;
+    trainCnt++;
+    return 0;
+}
+
+int releaseTrain(const char* i) {
+    int idx = findTrain(i);
+    if (idx == -1 || trains[idx].released) return -1;
+    trains[idx].released = true;
+    return 0;
+}
+
+int queryTrain(const char* i, const char* d) {
+    int idx = findTrain(i);
+    if (idx == -1) return -1;
+    Train& tr = trains[idx];
+    cout << tr.trainID << " " << tr.type << endl;
+    int t = tr.startHour * 60 + tr.startMin, tp = 0, dt = parseDate(d);
+    
+    for (int j = 0; j < tr.stationNum; j++) {
+        int at = t, lt = t;
+        if (j > 0) {
+            t += tr.travelTimes[j - 1];
+            at = t;
+            lt = t;
+            if (j < tr.stationNum - 1) t += tr.stopoverTimes[j - 1], lt = t;
+        }
+        char as[30], ls[30];
+        sprintf(as, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + at / 1440, (at % 1440) / 60, at % 60);
+        sprintf(ls, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + lt / 1440, (lt % 1440) / 60, lt % 60);
+        
+        if (j == 0) cout << tr.stations[j] << " xx-xx xx:xx -> " << ls << " 0 " << tr.seatNum << endl;
+        else if (j == tr.stationNum - 1) cout << tr.stations[j] << " " << as << " -> xx-xx xx:xx " << tp << " x" << endl;
+        else cout << tr.stations[j] << " " << as << " -> " << ls << " " << tp << " " << tr.seatNum << endl;
+        if (j < tr.stationNum - 1) tp += tr.prices[j];
+    }
+    return 0;
+}
+
+int deleteTrain(const char* i) {
+    int idx = findTrain(i);
+    if (idx == -1 || trains[idx].released) return -1;
+    trains[idx].exists = false;
+    return 0;
+}
+
+int queryTicket(const char* s, const char* t, const char* d, bool sortByTime) {
+    cout << 0 << endl;
+    return 0;
+}
+
+int queryTransfer(const char* s, const char* t, const char* d, bool sortByTime) {
+    cout << 0 << endl;
+    return 0;
+}
+
+int buyTicket(const char* u, const char* i, const char* d, int n, const char* f, const char* t, bool q) {
+    int ui = findUser(u);
+    if (ui == -1 || !loggedIn[ui]) return -1;
+    
+    int ti = findTrain(i);
+    if (ti == -1 || !trains[ti].released) return -1;
+    
+    Train& tr = trains[ti];
+    int fi = -1, to = -1;
+    for (int j = 0; j < tr.stationNum; j++) {
+        if (strcmp(tr.stations[j], f) == 0) fi = j;
+        if (strcmp(tr.stations[j], t) == 0) to = j;
+    }
+    if (fi == -1 || to == -1 || fi >= to) return -1;
+    
+    int dt = parseDate(d);
+    int price = 0;
+    for (int j = fi; j < to; j++) price += tr.prices[j];
+    
+    strcpy(orders[orderCnt].username, u);
+    strcpy(orders[orderCnt].trainID, i);
+    strcpy(orders[orderCnt].from, f);
+    strcpy(orders[orderCnt].to, t);
+    orders[orderCnt].fromIdx = fi;
+    orders[orderCnt].toIdx = to;
+    orders[orderCnt].num = n;
+    orders[orderCnt].price = price;
+    orders[orderCnt].date = dt;
+    orders[orderCnt].status = 0;
+    orders[orderCnt].exists = true;
+    orders[orderCnt].id = orderCnt;
+    orderCnt++;
+    
+    cout << price * n << endl;
+    return 0;
+}
+
+int queryOrder(const char* u) {
+    int ui = findUser(u);
+    if (ui == -1 || !loggedIn[ui]) return -1;
+    
+    int cnt = 0;
+    for (int i = orderCnt - 1; i >= 0; i--) {
+        if (orders[i].exists && strcmp(orders[i].username, u) == 0) cnt++;
+    }
+    cout << cnt << endl;
+    
+    for (int i = orderCnt - 1; i >= 0; i--) {
+        if (orders[i].exists && strcmp(orders[i].username, u) == 0) {
+            const char* status = (orders[i].status == 0) ? "success" : (orders[i].status == 1 ? "pending" : "refunded");
+            int ti = findTrain(orders[i].trainID);
+            if (ti == -1) continue;
+            Train& tr = trains[ti];
+            
+            int t = tr.startHour * 60 + tr.startMin;
+            for (int j = 0; j < orders[i].fromIdx; j++) {
+                if (j > 0) t += tr.stopoverTimes[j - 1];
+                t += tr.travelTimes[j];
+            }
+            int lt = t;
+            if (orders[i].fromIdx > 0) t += tr.stopoverTimes[orders[i].fromIdx - 1];
+            
+            for (int j = orders[i].fromIdx; j < orders[i].toIdx; j++) {
+                t += tr.travelTimes[j];
+                if (j < orders[i].toIdx - 1) t += tr.stopoverTimes[j];
+            }
+            int at = t;
+            
+            char ls[30], as[30];
+            int dt = orders[i].date;
+            sprintf(ls, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + lt / 1440, (lt % 1440) / 60, lt % 60);
+            sprintf(as, "%02d-%02d %02d:%02d", dt / 100, (dt % 100) + at / 1440, (at % 1440) / 60, at % 60);
+            
+            cout << "[" << status << "] " << orders[i].trainID << " " << orders[i].from << " " << ls
+                 << " -> " << orders[i].to << " " << as << " " << orders[i].price << " " << orders[i].num << endl;
+        }
+    }
+    
+    return 0;
+}
+
+int refundTicket(const char* u, int n) {
+    int ui = findUser(u);
+    if (ui == -1 || !loggedIn[ui]) return -1;
+    
+    int cnt = 0;
+    for (int i = orderCnt - 1; i >= 0; i--) {
+        if (orders[i].exists && strcmp(orders[i].username, u) == 0) {
+            cnt++;
+            if (cnt == n) {
+                if (orders[i].status == 2) return -1;
+                orders[i].status = 2;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
+int clean() {
+    userCnt = 0;
+    trainCnt = 0;
+    orderCnt = 0;
+    memset(loggedIn, 0, sizeof(loggedIn));
+    return 0;
+}
 
 int main() {
     ios::sync_with_stdio(false);
     cin.tie(0);
+    
+    userCnt = 0;
+    trainCnt = 0;
+    orderCnt = 0;
+    memset(loggedIn, 0, sizeof(loggedIn));
     
     string cmd;
     while (cin >> cmd) {
@@ -353,7 +322,7 @@ int main() {
                 else if (k == "-m") cin >> m;
                 else if (k == "-g") cin >> g;
             }
-            cout << sys.addUser(cu, u, p, n, m, g) << endl;
+            cout << addUser(cu, u, p, n, m, g) << endl;
         } else if (cmd == "login") {
             char u[25], p[35];
             string k;
@@ -361,14 +330,14 @@ int main() {
                 if (k == "-u") cin >> u;
                 else if (k == "-p") cin >> p;
             }
-            cout << sys.login(u, p) << endl;
+            cout << login(u, p) << endl;
         } else if (cmd == "logout") {
             char u[25];
             string k;
             while (cin >> k && k[0] == '-') {
                 if (k == "-u") cin >> u;
             }
-            cout << sys.logout(u) << endl;
+            cout << logout(u) << endl;
         } else if (cmd == "query_profile") {
             char cu[25], u[25];
             string k;
@@ -376,7 +345,7 @@ int main() {
                 if (k == "-c") cin >> cu;
                 else if (k == "-u") cin >> u;
             }
-            if (sys.queryProfile(cu, u) == -1) cout << -1 << endl;
+            if (queryProfile(cu, u) == -1) cout << -1 << endl;
         } else if (cmd == "modify_profile") {
             char cu[25], u[25], p[35] = "", n[35] = "", m[35] = "";
             int g = -1;
@@ -389,7 +358,7 @@ int main() {
                 else if (k == "-m") cin >> m;
                 else if (k == "-g") cin >> g;
             }
-            if (sys.modifyProfile(cu, u, p, n, m, g) == -1) cout << -1 << endl;
+            if (modifyProfile(cu, u, p, n, m, g) == -1) cout << -1 << endl;
         } else if (cmd == "add_train") {
             char i[25], s[102][35], x[10], d1[10], d2[10], y;
             int n, m, p[102], t[102], o[102];
@@ -411,12 +380,11 @@ int main() {
                     }
                 } else if (k == "-p") {
                     cin >> tmp;
-                    int cnt = 0, start = 0, val = 0;
+                    int cnt = 0, val = 0;
                     for (int j = 0; j <= tmp.length(); j++) {
                         if (j == tmp.length() || tmp[j] == '|') {
                             p[cnt++] = val;
                             val = 0;
-                            start = j + 1;
                         } else {
                             val = val * 10 + (tmp[j] - '0');
                         }
@@ -454,14 +422,14 @@ int main() {
             }
             char* ss[102];
             for (int j = 0; j < n; j++) ss[j] = s[j];
-            cout << sys.addTrain(i, n, m, ss, p, x, t, o, d1, d2, y) << endl;
+            cout << addTrain(i, n, m, ss, p, x, t, o, d1, d2, y) << endl;
         } else if (cmd == "release_train") {
             char i[25];
             string k;
             while (cin >> k && k[0] == '-') {
                 if (k == "-i") cin >> i;
             }
-            cout << sys.releaseTrain(i) << endl;
+            cout << releaseTrain(i) << endl;
         } else if (cmd == "query_train") {
             char i[25], d[10];
             string k;
@@ -469,14 +437,14 @@ int main() {
                 if (k == "-i") cin >> i;
                 else if (k == "-d") cin >> d;
             }
-            if (sys.queryTrain(i, d) == -1) cout << -1 << endl;
+            if (queryTrain(i, d) == -1) cout << -1 << endl;
         } else if (cmd == "delete_train") {
             char i[25];
             string k;
             while (cin >> k && k[0] == '-') {
                 if (k == "-i") cin >> i;
             }
-            cout << sys.deleteTrain(i) << endl;
+            cout << deleteTrain(i) << endl;
         } else if (cmd == "query_ticket") {
             char s[35], t[35], d[10];
             bool sortByTime = true;
@@ -491,7 +459,7 @@ int main() {
                     sortByTime = (v == "time");
                 }
             }
-            sys.queryTicket(s, t, d, sortByTime);
+            queryTicket(s, t, d, sortByTime);
         } else if (cmd == "query_transfer") {
             char s[35], t[35], d[10];
             bool sortByTime = true;
@@ -506,7 +474,7 @@ int main() {
                     sortByTime = (v == "time");
                 }
             }
-            sys.queryTransfer(s, t, d, sortByTime);
+            queryTransfer(s, t, d, sortByTime);
         } else if (cmd == "buy_ticket") {
             char u[25], i[25], d[10], f[35], t[35];
             int n;
@@ -525,14 +493,14 @@ int main() {
                     q = (v == "true");
                 }
             }
-            if (sys.buyTicket(u, i, d, n, f, t, q) == -1) cout << -1 << endl;
+            if (buyTicket(u, i, d, n, f, t, q) == -1) cout << -1 << endl;
         } else if (cmd == "query_order") {
             char u[25];
             string k;
             while (cin >> k && k[0] == '-') {
                 if (k == "-u") cin >> u;
             }
-            if (sys.queryOrder(u) == -1) cout << -1 << endl;
+            if (queryOrder(u) == -1) cout << -1 << endl;
         } else if (cmd == "refund_ticket") {
             char u[25];
             int n = 1;
@@ -541,9 +509,9 @@ int main() {
                 if (k == "-u") cin >> u;
                 else if (k == "-n") cin >> n;
             }
-            cout << sys.refundTicket(u, n) << endl;
+            cout << refundTicket(u, n) << endl;
         } else if (cmd == "clean") {
-            cout << sys.clean() << endl;
+            cout << clean() << endl;
         } else {
             string line;
             getline(cin, line);
